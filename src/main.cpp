@@ -9,7 +9,9 @@
 #define MOTOR_L1 26
 #define MOTOR_L2 25
 
-#define CLAMP(x, lower, upper) (x < lower ? lower : x > upper ? upper : x) 
+#define CLAMP(x, lower, upper) (x < lower ? lower : x > upper ? upper : x)
+
+#define ENABLE_DEBUG_PRINT 0
 
 // Array para armazenar os controles conectados
 ControllerPtr myControllers[BP32_MAX_GAMEPADS];
@@ -50,18 +52,22 @@ void setup() {
     
 }
 
-enum ControlMode: uint8_t {automaticUncorrected = 0b001, automaticCorrected = 0b010, manual = 0b100};
+enum ControlMode: uint8_t {automaticUncorrected = 0b001, automaticCorrected = 0b010, manual = 0b000};
 
 float changeModeDelay = 0;
 bool changeModeButtonHeld = false;
 
+float changeTurboModeDelay = 0;
+bool changeTurboModeButtonHeld = false;
+
 union {
+    uint8_t led;
     struct{
-        uint8_t mode:3;
+        ControlMode mode:2;
+        uint8_t maxTurbo:1;
         uint8_t turbo:1;
     };
-    uint8_t led;
-} controlMode = {.turbo = 0, .mode = ControlMode::automaticCorrected};
+} controlMode = {0b0110};
 
 unsigned long timeOld = 0, timeNew, dt = 0;
 
@@ -76,6 +82,7 @@ void loop() {
     // Se o controle 0 estiver conectado, lê os dados
     if (myControllers[0] && myControllers[0]->isConnected()) {
         
+        // mudar o modo de controle
         if (!changeModeButtonHeld && myControllers[0]->miscStart() && changeModeDelay < 0){
             changeModeButtonHeld = true;
             changeModeDelay = 100;
@@ -99,9 +106,40 @@ void loop() {
         if(changeModeDelay >= 0)
             changeModeDelay -= dt;
         
+        // mudar o modo de turbo
+        if (!changeTurboModeButtonHeld && myControllers[0]->miscSelect() && changeTurboModeDelay < 0){
+            changeTurboModeButtonHeld = true;
+            changeTurboModeDelay = 100;
+            controlMode.maxTurbo = !controlMode.maxTurbo;
+        }
+        else if (!myControllers[0]->miscSelect()){
+            changeTurboModeButtonHeld = false;
+        }
+        if(changeTurboModeDelay >= 0)
+            changeTurboModeDelay -= dt;
+        
         controlMode.turbo = myControllers[0]->r1();
         
         myControllers[0]->setPlayerLEDs(controlMode.led);
+        
+        #if ENABLE_DEBUG_PRINT
+            Console.printf("%s  ", myControllers[0]->getModelName());
+            
+            switch(controlMode.mode){
+                case ControlMode::automaticCorrected:
+                    Console.printf("Auto C ");
+                break;
+                
+                case ControlMode::automaticUncorrected:
+                    Console.printf("Auto U ");
+                break;
+                
+                case ControlMode::manual:
+                    Console.printf("Manual ");
+                break;
+            }
+            Console.printf("%c ", controlMode.turbo ? 'T' : ' ');
+        #endif
         
         float linVel;
         float angVel;
@@ -109,39 +147,98 @@ void loop() {
         int RSpeed;
         int LSpeed;
         
+        float turboMultiplier = 1;
+        
         switch(controlMode.mode){
             case ControlMode::automaticUncorrected:
-                linVel = -myControllers[0]->axisY();
+                linVel = myControllers[0]->axisY();
                 angVel = myControllers[0]->axisRX();
                 
-                linVel = CLAMP((linVel + 450) / (450 - (-490)) * 2 - 1, -1.0, 1.0);
+                #if ENABLE_DEBUG_PRINT
+                    Console.printf("lin = % 4.0f  ang = % 4.0f -> ", linVel, angVel);
+                #endif
+                
+                linVel = CLAMP((linVel - 490) / (-450 - (490)) * 2 - 1, -1.0, 1.0);
                 angVel = CLAMP((angVel + 530) / (530 - (-411)) * 2 - 1, -1.0, 1.0);
                 
-                RSpeed = (255 * linVel + 127 * angVel) / 2 * (controlMode.turbo ? 255 / 191 : 1);
-                LSpeed = (255 * linVel - 127 * angVel) / 2 * (controlMode.turbo ? 255 / 191 : 1);
+                if(abs(linVel) < .2)
+                    linVel = 0;
+                if(abs(angVel) < .2)
+                    angVel = 0;
+                    
+                RSpeed = (255 * linVel + 127 * angVel) / 2;
+                LSpeed = (255 * linVel - 127 * angVel) / 2;
+                
+                // multiplicador para o modo turbo se as velocidades não forem nulas
+                if (controlMode.turbo && (linVel || angVel)){
+                    turboMultiplier = controlMode.maxTurbo ?
+                        255.0 * std::max(abs(linVel), abs(angVel)) / std::max(abs(RSpeed), abs(LSpeed)) :
+                        255.0 / 191;
+                
+                    RSpeed = RSpeed * turboMultiplier;
+                    LSpeed = LSpeed * turboMultiplier;
+                }
+                
+                
+                #if ENABLE_DEBUG_PRINT
+                    Console.printf("lin = % 4.1f  ang = % 4.1f -> V_R = % 3d  V_L = % 3d\n", linVel * 100, angVel * 100, RSpeed, LSpeed);
+                #endif
             break;
             
             case ControlMode::automaticCorrected:
-                linVel = -myControllers[0]->axisY();
+                linVel = myControllers[0]->axisY();
                 angVel = myControllers[0]->axisRX();
                 
-                linVel = CLAMP((linVel + 450) / (450 - (-490)) * 2 - 1, -1.0, 1.0);
-                angVel = CLAMP((angVel + 530) / (530 - (-411)) * 2 - 1, -1.0, 1.0);
+                #if ENABLE_DEBUG_PRINT
+                    Console.printf("lin = % 4.0f  ang = % 4.0f -> ", linVel, angVel);
+                #endif
                 
-                RSpeed = (255 * linVel + (linVel > 0 ? 1 : -1) * 127 * angVel) / 2 * (controlMode.turbo ? 255 / 191 : 1);
-                LSpeed = (255 * linVel - (linVel > 0 ? 1 : -1) * 127 * angVel) / 2 * (controlMode.turbo ? 255 / 191 : 1);
+                linVel = CLAMP((linVel - 490) / (-450 - (490)) * 2 - 1, -1.0, 1.0);
+                angVel = CLAMP((angVel + 530) / (530 - (-400)) * 2 - 1, -1.0, 1.0);
+                
+                if(abs(linVel) < .2)
+                    linVel = 0;
+                if(abs(angVel) < .2)
+                    angVel = 0;
+                
+                RSpeed = (255 * linVel + (linVel > 0 ? 1 : -1) * 127 * angVel) / 2;
+                LSpeed = (255 * linVel - (linVel > 0 ? 1 : -1) * 127 * angVel) / 2;
+                
+                // multiplicador para o modo turbo se as velocidades não forem nulas
+                if (controlMode.turbo && (linVel || angVel)){
+                    turboMultiplier = controlMode.maxTurbo ?
+                        255.0 * std::max(abs(linVel), abs(angVel)) / std::max(abs(RSpeed), abs(LSpeed)) :
+                        255.0 / 191;
+                
+                    RSpeed = RSpeed * turboMultiplier;
+                    LSpeed = LSpeed * turboMultiplier;
+                }
+                
+                #if ENABLE_DEBUG_PRINT
+                    Console.printf("lin = % 4.1f  ang = % 4.1f -> V_R = % 3d  V_L = % 3d\n", linVel * 100, angVel * 100, RSpeed, LSpeed);
+                #endif
             break;
             
             case ControlMode::manual:
-                RSpeed = 255 * CLAMP((-myControllers[0]->axisY()  + 450) / (450 - (-490)) * 2 - 1, -1.0, 1.0);
-                LSpeed = 255 * CLAMP((-myControllers[0]->axisRY() + 450) / (450 - (-490)) * 2 - 1, -1.0, 1.0);
+                linVel = myControllers[0]->axisY();
+                angVel = myControllers[0]->axisRY();
                 
+                #if ENABLE_DEBUG_PRINT
+                    Console.printf("lin = % 4.0f  ang = % 4.0f -> ", linVel, angVel);
+                #endif
+                
+                linVel = CLAMP((linVel - 490) / (-450 - (490)) * 2 - 1, -1.0, 1.0);
+                angVel = CLAMP((angVel - 480) / (-450 - (480)) * 2 - 1, -1.0, 1.0);
+                
+                RSpeed = 255 * linVel;
+                LSpeed = 255 * angVel;
+                
+                #if ENABLE_DEBUG_PRINT
+                    Console.printf("lin = % 4.1f  ang = % 4.1f -> V_R = % 3d  V_L = % 3d\n", linVel * 100, angVel * 100, RSpeed, LSpeed);
+                #endif
             break;
         }
-        // No Bluepad32, os eixos vão de -511 a 512
-        
-        //Console.printf("lin = % 4.1f  ang = % 4.1f -> V_R = % 3d  V_L = % 3d\n", linVel * 100, angVel * 100, RSpeed, LSpeed);
-        //Console.printf("V_R = % 3d  V_L = % 3d\n", RSpeed, LSpeed);
+
         if(RSpeed > 20){
             analogWrite(MOTOR_R1, RSpeed);
             analogWrite(MOTOR_R2, 0);
