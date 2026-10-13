@@ -7,6 +7,8 @@
 #define MOTOR_R2 19
 #define MOTOR_L1 26
 #define MOTOR_L2 25
+#define FURADEIRA 23
+#define SOLENOIDE 21
 
 /*=========================================================================
  * CALIBRAÇÃO DAS ENTRADAS ANALÓGICAS
@@ -30,6 +32,7 @@
 
 // multiplicador da velocidade angular 
 #define ANGULAR_VELOCITY 127
+
 
 // MACROS ADICIONAIS
 

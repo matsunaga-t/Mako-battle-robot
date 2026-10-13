@@ -26,19 +26,33 @@ void onDisconnectedController(ControllerPtr ctl) {
         if (myControllers[i] == ctl) {
             myControllers[i] = nullptr;
             digitalWrite(LED_BUILTIN, LOW);
+            digitalWrite(FURADEIRA, LOW);
+            digitalWrite(SOLENOIDE, LOW);
+            analogWrite(MOTOR_R1, 0);
+            analogWrite(MOTOR_R2, 0);
+            analogWrite(MOTOR_L1, 0);
+            analogWrite(MOTOR_L2, 0);
             break;
         }
     }
 }
 
 void setup() {
-    //Serial.begin(115200);
-    
     pinMode(LED_BUILTIN, OUTPUT);
     pinMode(MOTOR_R1, OUTPUT);
     pinMode(MOTOR_R2, OUTPUT);
     pinMode(MOTOR_L1, OUTPUT);
     pinMode(MOTOR_L2, OUTPUT);
+    pinMode(FURADEIRA, OUTPUT);
+    pinMode(SOLENOIDE, OUTPUT);
+    
+    
+    analogWrite(MOTOR_R1, 0);
+    analogWrite(MOTOR_R2, 0);
+    analogWrite(MOTOR_L1, 0);
+    analogWrite(MOTOR_L2, 0);
+    digitalWrite(FURADEIRA, 0);
+    digitalWrite(SOLENOIDE, 0);
     
     // Inicializa o Bluepad32 com os callbacks
     BP32.setup(&onConnectedController, &onDisconnectedController);
@@ -71,6 +85,13 @@ void loop() {
     // Se o controle 0 estiver conectado, lê os dados
     if (myControllers[0] && myControllers[0]->isConnected()) {
         
+        // ativar a arma
+        
+        digitalWrite(FURADEIRA, myControllers[0]->l2());
+        
+        #if ENABLE_DEBUG_PRINT
+            Console.printf("%s ", myControllers[0]->l2() ? "ON " : "OFF");
+        #endif
         // mudar o modo de controle
         if (!changeModeButtonHeld && myControllers[0]->miscStart() && changeModeDelay < 0){
             changeModeButtonHeld = true;
