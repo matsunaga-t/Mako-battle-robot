@@ -15,6 +15,14 @@ void onConnectedController(ControllerPtr ctl) {
         if (myControllers[i] == nullptr) {
             myControllers[i] = ctl;
             digitalWrite(LED_BUILTIN, HIGH);
+            ControllerProperties prop =  myControllers[0]->getProperties();
+            Console.printf("BT=%6s\n\t", prop.btaddr);
+            for(int i = 0; i < 6; i++){
+                Console.printf("%hhd%s", prop.btaddr[i], i == 5 ? "\n" : "--");
+            }
+            Console.printf("type=%hd, %hhd", prop.type, prop.subtype);
+            Console.printf("VID=%hd\nPID=%hd", prop.vendor_id, prop.product_id);
+            Console.printf("flags=%b", prop.flags);
             break;
         }
     }
@@ -57,6 +65,8 @@ void setup() {
     // Inicializa o Bluepad32 com os callbacks
     BP32.setup(&onConnectedController, &onDisconnectedController);
     
+    BP32.enableBLEService(true);
+    
 }
 
 float changeModeDelay = 0;
@@ -82,11 +92,12 @@ void loop() {
     // Atualiza o estado da antena Bluetooth
     BP32.update();
 
+    
     // Se o controle 0 estiver conectado, lê os dados
-    if (myControllers[0] && myControllers[0]->isConnected()) {
-        
+    if (0 && myControllers[0] && myControllers[0]->isConnected()) {
+
+        #ifdef NOT_DEFINED
         // ativar a arma
-        
         digitalWrite(FURADEIRA, myControllers[0]->l2());
         
         #if ENABLE_DEBUG_PRINT
@@ -175,6 +186,7 @@ void loop() {
             analogWrite(MOTOR_L1, 0);
             analogWrite(MOTOR_L2, -LSpeed);
         }
+        #endif
     }
 
     delay(20); 
