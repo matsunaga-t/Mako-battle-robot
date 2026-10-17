@@ -1,6 +1,5 @@
 #include <Arduino.h>
 #include <Bluepad32.h>
-#include <ESP32Servo.h>
 #include <time.h>
 #include <sys/time.h>
 
