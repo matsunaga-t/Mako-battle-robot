@@ -40,4 +40,5 @@
 
 #define NORMALIZE_CONTROLLER_INPUT(input, lower, upper) (CLAMP(((input) - (lower)) / ((upper) - (lower)) * 2 - 1, -1.0, 1.0))
 
-#define ENABLE_DEBUG_PRINT 1
+#define ENABLE_DEBUG_PRINT !1
+#define ENABLE_COLORS_IN_PRINT 1

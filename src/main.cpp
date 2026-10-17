@@ -67,7 +67,7 @@ union ControlMode {
     struct{
         private: uint8_t _firstLed: 1;    // sempre ligado
         public:  uint8_t corrected: 1;    // indica se é o modo corrigido
-        private: uint8_t _paddignBit: 1;  // sempre desligado
+        public:  uint8_t weapon: 1;       // indica se a arma está ativada
         public:  uint8_t turbo: 1;        // indica se o turbo está ativado
     } settings;
 } controlMode = {0b0011};
@@ -86,11 +86,14 @@ void loop() {
     if (myControllers[0] && myControllers[0]->isConnected()) {
         
         // ativar a arma
-        
-        digitalWrite(FURADEIRA, myControllers[0]->l2());
+        digitalWrite(FURADEIRA, controlMode.settings.weapon = myControllers[0]->l2());
         
         #if ENABLE_DEBUG_PRINT
-            Console.printf("%s ", myControllers[0]->l2() ? "ON " : "OFF");
+            #if ENABLE_COLORS_IN_PRINT
+                Console.printf("\033[90mweapon: %s  ", controlMode.settings.weapon ? "\033[91mON " : "\033[97mOFF");
+            #else
+                Console.printf("weapon: %s  ", controlMode.settings.weapon ? "ON " : "OFF");
+            #endif
         #endif
         // mudar o modo de controle
         if (!changeModeButtonHeld && myControllers[0]->miscStart() && changeModeDelay < 0){
@@ -109,12 +112,15 @@ void loop() {
         myControllers[0]->setPlayerLEDs(controlMode.led);
         
         #if ENABLE_DEBUG_PRINT
-            Console.printf("%d ", myControllers[0]->getModel());
-            Console.printf("%s ", myControllers[0]->getModelName());
-            
-            Console.printf("%s %s ",
-                    controlMode.settings.turbo ? "turbo" : "     ",
-                    controlMode.settings.corrected ? "  corr " : "uncorr ");
+            #if ENABLE_COLORS_IN_PRINT
+                Console.printf("\033[90mturbo: %s\033[90m  mode: \033[97m%s  ",
+                        controlMode.settings.turbo ? "\033[93mON " : "\033[97mOFF",
+                        controlMode.settings.corrected ? "  corr" : "uncorr");
+            #else
+                Console.printf("turbo: %s  mode: %s  ",
+                        controlMode.settings.turbo ? "ON " : "OFF",
+                        controlMode.settings.corrected ? "  corr" : "uncorr");
+            #endif
         #endif
         
         float linVel;
@@ -129,7 +135,11 @@ void loop() {
         angVel = myControllers[0]->axisRX();
         
         #if ENABLE_DEBUG_PRINT
-            Console.printf("lin = % 4.0f  ang = % 4.0f -> ", linVel, angVel);
+                #if ENABLE_COLORS_IN_PRINT
+                Console.printf("\033[90mraw: (lin = \033[97m% 4.0f\033[90m  ang = \033[97m% 4.0f\033[90m) \033[34m-> ", linVel, angVel);
+            #else
+                Console.printf("raw: (lin = % 4.0f  ang = % 4.0f) -> ", linVel, angVel);
+            #endif
         #endif
         
         linVel = NORMALIZE_CONTROLLER_INPUT(linVel, LEFT_ANALOG_Y_MIN, LEFT_ANALOG_Y_MAX);
@@ -155,7 +165,19 @@ void loop() {
         LSpeed = CLAMP(LSpeed, -255, 255);
         
         #if ENABLE_DEBUG_PRINT
-            Console.printf("lin = % 4.1f  ang = % 4.1f -> V_R = % 3d  V_L = % 3d\n", linVel * 100, angVel * 100, RSpeed, LSpeed);
+            #if ENABLE_COLORS_IN_PRINT
+                u_char linColor[3] = {linVel > 0 ? (u_char)((1 - linVel) * 255) : 255, linVel < 0 ? (u_char)((1 + linVel) * 255) : 255, (u_char)((1 - abs(linVel)) * 255)};
+                u_char angColor[3] = {angVel > 0 ? (u_char)((1 - angVel) * 255) : 255, angVel < 0 ? (u_char)((1 + angVel) * 255) : 255, (u_char)((1 - abs(angVel)) * 255)};
+                Console.printf("\033[90mrel: (lin = \033[38;2;%hhu;%hhu;%hhum% 6.1f\033[90m  ang = \033[38;2;%hhu;%hhu;%hhum% 6.1f\033[90m) \033[34m=> ",
+                    linColor[0], linColor[1], linColor[2], linVel * 100, angColor[0], angColor[1], angColor[2], angVel * 100);
+                
+                u_char RColor[3] = {RSpeed > 0 ? (u_char)(255 - RSpeed) : 255, RSpeed < 0 ? (u_char)(255 + RSpeed) : 255, (u_char)(255 - abs(RSpeed))};
+                u_char LColor[3] = {LSpeed > 0 ? (u_char)(255 - LSpeed) : 255, LSpeed < 0 ? (u_char)(255 + LSpeed) : 255, (u_char)(255 - abs(LSpeed))};
+                Console.printf("\033[90mout: (V_R = \033[38;2;%hhu;%hhu;%hhum% 4d  \033[90mV_L = \033[38;2;%hhu;%hhu;%hhum% 4d\033[90m)\033[m\n",
+                    RColor[0], RColor[1], RColor[2], RSpeed, LColor[0], LColor[1], LColor[2], LSpeed);
+            #else
+                Console.printf("rel: (lin = % 6.1f  ang = % 6.1f) -> out: (V_R = % 3d  V_L = % 3d)\n", linVel * 100, angVel * 100, RSpeed, LSpeed);
+            #endif
         #endif
 
         if(RSpeed >= 0){
