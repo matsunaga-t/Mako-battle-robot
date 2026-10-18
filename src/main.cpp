@@ -4,6 +4,7 @@
 #include <sys/time.h>
 
 #include "settings.h"
+#include "functionalMacros.h"
 
 // Ponteiro para armazenar o controle
 ControllerPtr myController = nullptr;
@@ -12,6 +13,7 @@ ControllerPtr myController = nullptr;
 void onConnectedController(ControllerPtr ctl) {
     ControllerProperties prop =  ctl->getProperties();
 
+    // confere se as suas credenciais batem com as do controle desejado
     if (prop.btaddr[0]  == controllerBTAdr[0] &&
         prop.btaddr[1]  == controllerBTAdr[1] &&
         prop.btaddr[2]  == controllerBTAdr[2] &&
@@ -22,16 +24,29 @@ void onConnectedController(ControllerPtr ctl) {
         prop.product_id == controllerPID
     ){
         #if ENABLE_CONNECTION_DEBUG_PRINT
-            Console.printf("controller %s accepted\nFurther connections disabled\n", ctl->getModelName());
+            #if ENABLE_COLORS_IN_PRINT
+                Console.printf("\ncontroller \033[97m%s \033[32maccepted\n\033[93mFurther connections disabled\033[m\n", ctl->getModelName());
+            #else
+                Console.printf("\ncontroller %s accepted\nFurther connections disabled\n", ctl->getModelName());
+            #endif
         #endif
         myController = ctl;
         digitalWrite(LED_BUILTIN, HIGH);
+        
+        // desativa localização por novos controles
+        // dessa forma, apenas o controle desejado consegue se conectar
         BP32.enableNewBluetoothConnections(false);
     }
     else {
         #if ENABLE_CONNECTION_DEBUG_PRINT
-            Console.printf("controller %s rejected\n", ctl->getModelName());
+            #if ENABLE_COLORS_IN_PRINT
+                Console.printf("\ncontroller \033[97m%s \033[91mrejected\033[m\n", ctl->getModelName());
+            #else
+                Console.printf("\ncontroller %s rejected\n", ctl->getModelName());
+            #endif
         #endif
+        
+        // desconecta o controle e deleta as chaves, para que não se reconecte a ele por engano
         ctl->disconnect();
         BP32.forgetBluetoothKeys();
     }
@@ -40,13 +55,23 @@ void onConnectedController(ControllerPtr ctl) {
 // Callback: Quando um controle desconecta
 void onDisconnectedController(ControllerPtr ctl) {
     #if ENABLE_CONNECTION_DEBUG_PRINT
-        Console.printf("controller %s disconnected\n", ctl->getModelName());
+        #if ENABLE_COLORS_IN_PRINT
+                Console.printf("\ncontroller \033[97m%s\033[m disconnected\n", ctl->getModelName());
+            #else
+                Console.printf("\ncontroller %s disconnected\n", ctl->getModelName());
+            #endif
     #endif
     if (myController == ctl) {
         #if ENABLE_CONNECTION_DEBUG_PRINT
-            Console.print("failsafe activated\n");
+            #if ENABLE_COLORS_IN_PRINT
+                Console.print("\033[93mfailsafe activated\033[m\n");
+            #else
+                Console.print("failsafe activated\n");
+            #endif
         #endif
         myController = nullptr;
+        
+        // desativa todas as saídas como failsafe
         digitalWrite(LED_BUILTIN, LOW);
         digitalWrite(FURADEIRA, LOW);
         digitalWrite(SOLENOIDE, LOW);
@@ -58,8 +83,7 @@ void onDisconnectedController(ControllerPtr ctl) {
 }
 
 void setup() {
-    // LED builtin para a conexão com o controle
-    pinMode(LED_BUILTIN, OUTPUT);
+    pinMode(LED_BUILTIN, OUTPUT);  // para saber o estado da conexão com o controle
     pinMode(MOTOR_R1, OUTPUT);
     pinMode(MOTOR_R2, OUTPUT);
     pinMode(MOTOR_L1, OUTPUT);
@@ -81,14 +105,30 @@ void setup() {
 float changeModeDelay = 0;
 bool changeModeButtonHeld = false;
 
+/**
+ * Serve para armazenar flags das configurações do controle 
+ * e mapeá-las aos LEDs dele
+ */
 union ControlMode {
+    // o bitmap dos LEDs
     uint8_t led;
-    struct{
-        private: uint8_t _firstLed: 1;    // sempre ligado
-        public:  uint8_t corrected: 1;    // indica se é o modo corrigido
-        public:  uint8_t weapon: 1;       // indica se a arma está ativada
-        public:  uint8_t turbo: 1;        // indica se o turbo está ativado
-    } settings;
+    
+    // bitmap das configurações
+    struct{       
+        // sempre ligado
+        // usado para saber que o controle está conectado
+        private: uint8_t _firstLed: 1;
+        
+        // indica se é o modo corrigido
+        // nesse modo, o robô é controlado como um carro normal
+        public:  uint8_t corrected: 1;
+        
+        // indica se a arma está ativada
+        public:  uint8_t weapon: 1;
+        
+        // indica se o turbo está ativado
+        public:  uint8_t turbo: 1;
+    } settings; 
 } controlMode = {0b0011};
 
 unsigned long timeOld = 0, timeNew, dt = 0;
@@ -99,20 +139,19 @@ void loop() {
     dt = timeNew - timeOld;
     timeOld = timeNew;
     
-    #if ENABLE_DEBUG_PRINT
+    #if ENABLE_TIME_DELTA_DEBUG_PRINT
         #if ENABLE_COLORS_IN_PRINT
-            Console.printf("\033[90mdt= % 4lu  ", dt);
+            Console.printf("\033[90mdt= \033[97m%3lu  ", dt);
         #else
-            Console.printf("dt= % 4lu  ", dt);
+            Console.printf("dt= %3lu  ", dt);
         #endif
     #endif
     
     // Atualiza o estado da antena Bluetooth
     BP32.update();
     
-    // Se o controle 0 estiver conectado, lê os dados
+    // Se o controle estiver conectado, lê os dados
     if (myController && myController->isConnected()) {
-
         // ativar a arma
         digitalWrite(FURADEIRA, controlMode.settings.weapon = myController->l2());
         
@@ -123,7 +162,10 @@ void loop() {
                 Console.printf("weapon: %s  ", controlMode.settings.weapon ? "ON " : "OFF");
             #endif
         #endif
+        
         // mudar o modo de controle
+        // o código exige um tempo de 100ms entre mudanças, além de ser necessário soltar o botão `+`
+        // do controle.
         if (!changeModeButtonHeld && myController->miscStart() && changeModeDelay < 0){
             changeModeButtonHeld = true;
             changeModeDelay = 100;
@@ -153,14 +195,13 @@ void loop() {
             #endif
         #endif
         
-        float linVel;
-        float angVel;
+        float linVel;  // velocidade linear
+        float angVel;  // velocidade angular
         
-        int RSpeed;
-        int LSpeed;
+        int RSpeed;    // PWM enviado para as rodas direitas
+        int LSpeed;    // PWM enviado para as rodas esquerdas
         
-        float turboMultiplier = 1;
-        
+        // lê as entradas
         linVel = myController->axisY();
         angVel = myController->axisRX();
         
@@ -172,25 +213,32 @@ void loop() {
             #endif
         #endif
         
+        // normaliza para -1 e 1
         linVel = NORMALIZE_CONTROLLER_INPUT(linVel, LEFT_ANALOG_Y_MIN, LEFT_ANALOG_Y_MAX);
         angVel = NORMALIZE_CONTROLLER_INPUT(angVel, RIGHT_ANALOG_X_MIN, RIGHT_ANALOG_X_MAX);
         
+        // confere se passam do limiar
+        // isso ajuda a evitar os pequenos offsets que existem nos analógicos do controle
         if(abs(linVel) < VALID_INPUT_THRESHOLD)
             linVel = 0;
         if(abs(angVel) < VALID_INPUT_THRESHOLD)
             angVel = 0;
         
-        RSpeed = (LINEAR_VELOCITY * linVel + (!controlMode.settings.corrected || linVel >= 0 ? 1 : -1) * ANGULAR_VELOCITY * angVel) / 2;
-        LSpeed = (LINEAR_VELOCITY * linVel - (!controlMode.settings.corrected || linVel >= 0 ? 1 : -1) * ANGULAR_VELOCITY * angVel) / 2;
+        // calcula a velocidade de cada roda
+        // notando que a da roda esquerda é invertida
+        // também é importante destacar que o modo corrigido atua aqui
+        RSpeed = CALCULATE_MOTOR_SPEED(linVel, angVel,   controlMode.settings.corrected && linVel < 0);
+        LSpeed = CALCULATE_MOTOR_SPEED(linVel, angVel, !(controlMode.settings.corrected && linVel < 0));
         
         // multiplicador para o modo turbo se as velocidades não forem nulas
         if (controlMode.settings.turbo && (linVel || angVel)){
-            turboMultiplier = 255.0 * std::max(abs(linVel), abs(angVel)) / std::max(abs(RSpeed), abs(LSpeed));
+            float turboMultiplier = 255.0 * std::max(abs(linVel), abs(angVel)) / std::max(abs(RSpeed), abs(LSpeed));
         
             RSpeed *= turboMultiplier;
             LSpeed *= turboMultiplier;
         }
         
+        // isso garante que o valor esteja nos limites desejados
         RSpeed = CLAMP(RSpeed, -255, 255);
         LSpeed = CLAMP(LSpeed, -255, 255);
         
@@ -203,31 +251,21 @@ void loop() {
                 
                 u_char RColor[3] = {RSpeed > 0 ? (u_char)(255 - RSpeed) : 255, RSpeed < 0 ? (u_char)(255 + RSpeed) : 255, (u_char)(255 - abs(RSpeed))};
                 u_char LColor[3] = {LSpeed > 0 ? (u_char)(255 - LSpeed) : 255, LSpeed < 0 ? (u_char)(255 + LSpeed) : 255, (u_char)(255 - abs(LSpeed))};
-                Console.printf("\033[90mout: (V_R = \033[38;2;%hhu;%hhu;%hhum% 4d  \033[90mV_L = \033[38;2;%hhu;%hhu;%hhum% 4d\033[90m)\033[m\n",
+                Console.printf("\033[90mout: (V_R = \033[38;2;%hhu;%hhu;%hhum% 4d  \033[90mV_L = \033[38;2;%hhu;%hhu;%hhum% 4d\033[90m)\033[m",
                     RColor[0], RColor[1], RColor[2], RSpeed, LColor[0], LColor[1], LColor[2], LSpeed);
             #else
-                Console.printf("rel: (lin = % 6.1f  ang = % 6.1f) -> out: (V_R = % 3d  V_L = % 3d)\n", linVel * 100, angVel * 100, RSpeed, LSpeed);
+                Console.printf("rel: (lin = % 6.1f  ang = % 6.1f) -> out: (V_R = % 3d  V_L = % 3d)", linVel * 100, angVel * 100, RSpeed, LSpeed);
             #endif
         #endif
 
-        if(RSpeed >= 0){
-            analogWrite(MOTOR_R1, RSpeed);
-            analogWrite(MOTOR_R2, 0);
-        }
-        else{
-            analogWrite(MOTOR_R1, 0);
-            analogWrite(MOTOR_R2, -RSpeed);
-        }
+        // atualiza a velocidade dos motores
+        SET_MOTOR_SPEED(RSpeed, MOTOR_R1, MOTOR_R2);
+        SET_MOTOR_SPEED(LSpeed, MOTOR_L1, MOTOR_L2);
         
-        if(LSpeed >= 0){
-            analogWrite(MOTOR_L1, LSpeed);
-            analogWrite(MOTOR_L2, 0);
-        }
-        else{
-            analogWrite(MOTOR_L1, 0);
-            analogWrite(MOTOR_L2, -LSpeed);
-        }
     }
+    #if ENABLE_DEBUG_PRINT || ENABLE_TIME_DELTA_DEBUG_PRINT
+    Console.println();
+    #endif
 
     delay(20); 
 }
