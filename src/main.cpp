@@ -1,51 +1,64 @@
 #include <Arduino.h>
 #include <Bluepad32.h>
-#include <ESP32Servo.h>
 #include <time.h>
 #include <sys/time.h>
 
 #include "settings.h"
 
-// Array para armazenar os controles conectados
-ControllerPtr myControllers[BP32_MAX_GAMEPADS];
+// Ponteiro para armazenar o controle
+ControllerPtr myController = nullptr;
 
 // Callback: Quando um controle conecta
 void onConnectedController(ControllerPtr ctl) {
-    for (int i = 0; i < BP32_MAX_GAMEPADS; i++) {
-        if (myControllers[i] == nullptr) {
-            myControllers[i] = ctl;
-            digitalWrite(LED_BUILTIN, HIGH);
-            ControllerProperties prop =  myControllers[0]->getProperties();
-            Console.printf("BT=%6s\n\t", prop.btaddr);
-            for(int i = 0; i < 6; i++){
-                Console.printf("%hhd%s", prop.btaddr[i], i == 5 ? "\n" : "--");
-            }
-            Console.printf("type=%hd, %hhd", prop.type, prop.subtype);
-            Console.printf("VID=%hd\nPID=%hd", prop.vendor_id, prop.product_id);
-            Console.printf("flags=%b", prop.flags);
-            break;
-        }
+    ControllerProperties prop =  ctl->getProperties();
+
+    if (prop.btaddr[0]  == controllerBTAdr[0] &&
+        prop.btaddr[1]  == controllerBTAdr[1] &&
+        prop.btaddr[2]  == controllerBTAdr[2] &&
+        prop.btaddr[3]  == controllerBTAdr[3] &&
+        prop.btaddr[4]  == controllerBTAdr[4] &&
+        prop.btaddr[5]  == controllerBTAdr[5] &&
+        prop.vendor_id  == controllerVID      &&
+        prop.product_id == controllerPID
+    ){
+        #if ENABLE_CONNECTION_DEBUG_PRINT
+            Console.printf("controller %s accepted\nFurther connections disabled\n", ctl->getModelName());
+        #endif
+        myController = ctl;
+        digitalWrite(LED_BUILTIN, HIGH);
+        BP32.enableNewBluetoothConnections(false);
+    }
+    else {
+        #if ENABLE_CONNECTION_DEBUG_PRINT
+            Console.printf("controller %s rejected\n", ctl->getModelName());
+        #endif
+        ctl->disconnect();
+        BP32.forgetBluetoothKeys();
     }
 }
 
 // Callback: Quando um controle desconecta
 void onDisconnectedController(ControllerPtr ctl) {
-    for (int i = 0; i < BP32_MAX_GAMEPADS; i++) {
-        if (myControllers[i] == ctl) {
-            myControllers[i] = nullptr;
-            digitalWrite(LED_BUILTIN, LOW);
-            digitalWrite(FURADEIRA, LOW);
-            digitalWrite(SOLENOIDE, LOW);
-            analogWrite(MOTOR_R1, 0);
-            analogWrite(MOTOR_R2, 0);
-            analogWrite(MOTOR_L1, 0);
-            analogWrite(MOTOR_L2, 0);
-            break;
-        }
+    #if ENABLE_CONNECTION_DEBUG_PRINT
+        Console.printf("controller %s disconnected\n", ctl->getModelName());
+    #endif
+    if (myController == ctl) {
+        #if ENABLE_CONNECTION_DEBUG_PRINT
+            Console.print("failsafe activated\n");
+        #endif
+        myController = nullptr;
+        digitalWrite(LED_BUILTIN, LOW);
+        digitalWrite(FURADEIRA, LOW);
+        digitalWrite(SOLENOIDE, LOW);
+        analogWrite(MOTOR_R1, 0);
+        analogWrite(MOTOR_R2, 0);
+        analogWrite(MOTOR_L1, 0);
+        analogWrite(MOTOR_L2, 0);
     }
 }
 
 void setup() {
+    // LED builtin para a conexão com o controle
     pinMode(LED_BUILTIN, OUTPUT);
     pinMode(MOTOR_R1, OUTPUT);
     pinMode(MOTOR_R2, OUTPUT);
@@ -53,7 +66,6 @@ void setup() {
     pinMode(MOTOR_L2, OUTPUT);
     pinMode(FURADEIRA, OUTPUT);
     pinMode(SOLENOIDE, OUTPUT);
-    
     
     analogWrite(MOTOR_R1, 0);
     analogWrite(MOTOR_R2, 0);
@@ -64,9 +76,6 @@ void setup() {
     
     // Inicializa o Bluepad32 com os callbacks
     BP32.setup(&onConnectedController, &onDisconnectedController);
-    
-    BP32.enableBLEService(true);
-    
 }
 
 float changeModeDelay = 0;
@@ -85,43 +94,44 @@ union ControlMode {
 unsigned long timeOld = 0, timeNew, dt = 0;
 
 void loop() {
+    // Calcula o tempo decorrido desde a última atualização
     timeNew = millis();
     dt = timeNew - timeOld;
     timeOld = timeNew;
     
     // Atualiza o estado da antena Bluetooth
     BP32.update();
-
     
     // Se o controle 0 estiver conectado, lê os dados
-    if (0 && myControllers[0] && myControllers[0]->isConnected()) {
+    if (myController && myController->isConnected()) {
 
-        #ifdef NOT_DEFINED
         // ativar a arma
-        digitalWrite(FURADEIRA, myControllers[0]->l2());
+        digitalWrite(FURADEIRA, myController->l2());
         
         #if ENABLE_DEBUG_PRINT
             Console.printf("%s ", myControllers[0]->l2() ? "ON " : "OFF");
         #endif
         // mudar o modo de controle
-        if (!changeModeButtonHeld && myControllers[0]->miscStart() && changeModeDelay < 0){
+        if (!changeModeButtonHeld && myController->miscStart() && changeModeDelay < 0){
             changeModeButtonHeld = true;
             changeModeDelay = 100;
             controlMode.settings.corrected = !controlMode.settings.corrected;
         }
-        else if (!myControllers[0]->miscStart()){
+        else if (!myController->miscStart()){
             changeModeButtonHeld = false;
         }
         if(changeModeDelay >= 0)
             changeModeDelay -= dt;
         
-        controlMode.settings.turbo = myControllers[0]->r1();
+        // aciona o modo turbo
+        controlMode.settings.turbo = myController->r1();
         
-        myControllers[0]->setPlayerLEDs(controlMode.led);
+        // atualiza os LEDs do controle
+        myController->setPlayerLEDs(controlMode.led);
         
         #if ENABLE_DEBUG_PRINT
-            Console.printf("%d ", myControllers[0]->getModel());
-            Console.printf("%s ", myControllers[0]->getModelName());
+            Console.printf("%d ", myController->getModel());
+            Console.printf("%s ", myController->getModelName());
             
             Console.printf("%s %s ",
                     controlMode.settings.turbo ? "turbo" : "     ",
@@ -136,8 +146,8 @@ void loop() {
         
         float turboMultiplier = 1;
         
-        linVel = myControllers[0]->axisY();
-        angVel = myControllers[0]->axisRX();
+        linVel = myController->axisY();
+        angVel = myController->axisRX();
         
         #if ENABLE_DEBUG_PRINT
             Console.printf("lin = % 4.0f  ang = % 4.0f -> ", linVel, angVel);
@@ -166,7 +176,7 @@ void loop() {
         LSpeed = CLAMP(LSpeed, -255, 255);
         
         #if ENABLE_DEBUG_PRINT
-            Console.printf("lin = % 4.1f  ang = % 4.1f -> V_R = % 3d  V_L = % 3d\n", linVel * 100, angVel * 100, RSpeed, LSpeed);
+            Console.printf("lin = % 4.1f  ang = % 4.1f -> V_R = % 3d  V_L = % 3d", linVel * 100, angVel * 100, RSpeed, LSpeed);
         #endif
 
         if(RSpeed >= 0){
@@ -186,7 +196,6 @@ void loop() {
             analogWrite(MOTOR_L1, 0);
             analogWrite(MOTOR_L2, -LSpeed);
         }
-        #endif
     }
 
     delay(20); 
