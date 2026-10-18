@@ -56,8 +56,11 @@ const u_int16_t controllerPID = 816;
 /*=========================================================================
  * CONFIGURAÇÕES DE IMPRESSÃO PARA DEBUG
  *=========================================================================*/
-// ativa o debug print
-#define ENABLE_DEBUG_PRINT !1
+// ativa a impressão das entradas dos analógicos e saídas das rodas
+#define ENABLE_IO_DEBUG_PRINT !1
+
+// ativa a impressão do estado do robô (arma, turbo e modo de controle)
+#define ENABLE_ROBOT_STATE_DEBUG_PRINT !1
 
 // ativa logs de conexão e desconexão dos controles
 #define ENABLE_CONNECTION_DEBUG_PRINT !1

@@ -155,7 +155,7 @@ void loop() {
         // ativar a arma
         digitalWrite(FURADEIRA, controlMode.settings.weapon = myController->l2());
         
-        #if ENABLE_DEBUG_PRINT
+        #if ENABLE_ROBOT_STATE_DEBUG_PRINT
             #if ENABLE_COLORS_IN_PRINT
                 Console.printf("\033[90mweapon: %s  ", controlMode.settings.weapon ? "\033[91mON " : "\033[97mOFF");
             #else
@@ -183,7 +183,7 @@ void loop() {
         // atualiza os LEDs do controle
         myController->setPlayerLEDs(controlMode.led);
         
-        #if ENABLE_DEBUG_PRINT
+        #if ENABLE_ROBOT_STATE_DEBUG_PRINT
             #if ENABLE_COLORS_IN_PRINT
                 Console.printf("\033[90mturbo: %s\033[90m  mode: \033[97m%s  ",
                         controlMode.settings.turbo ? "\033[93mON " : "\033[97mOFF",
@@ -205,7 +205,7 @@ void loop() {
         linVel = myController->axisY();
         angVel = myController->axisRX();
         
-        #if ENABLE_DEBUG_PRINT
+        #if ENABLE_IO_DEBUG_PRINT
                 #if ENABLE_COLORS_IN_PRINT
                 Console.printf("\033[90mraw: (lin = \033[97m% 4.0f\033[90m  ang = \033[97m% 4.0f\033[90m) \033[34m-> ", linVel, angVel);
             #else
@@ -242,7 +242,7 @@ void loop() {
         RSpeed = CLAMP(RSpeed, -255, 255);
         LSpeed = CLAMP(LSpeed, -255, 255);
         
-        #if ENABLE_DEBUG_PRINT
+        #if ENABLE_IO_DEBUG_PRINT
             #if ENABLE_COLORS_IN_PRINT
                 u_char linColor[3] = {linVel > 0 ? (u_char)((1 - linVel) * 255) : 255, linVel < 0 ? (u_char)((1 + linVel) * 255) : 255, (u_char)((1 - abs(linVel)) * 255)};
                 u_char angColor[3] = {angVel > 0 ? (u_char)((1 - angVel) * 255) : 255, angVel < 0 ? (u_char)((1 + angVel) * 255) : 255, (u_char)((1 - abs(angVel)) * 255)};
@@ -263,7 +263,7 @@ void loop() {
         SET_MOTOR_SPEED(LSpeed, MOTOR_L1, MOTOR_L2);
         
     }
-    #if ENABLE_DEBUG_PRINT || ENABLE_TIME_DELTA_DEBUG_PRINT
+    #if ENABLE_IO_DEBUG_PRINT || ENABLE_ROBOT_STATE_DEBUG_PRINT || ENABLE_TIME_DELTA_DEBUG_PRINT
     Console.println();
     #endif
 
