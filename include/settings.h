@@ -21,6 +21,15 @@
 #define RIGHT_ANALOG_X_MAX   411  // (int) 
 
 /*=========================================================================
+ * CREDENCIAIS DO CONTROLE
+ *=========================================================================
+ * NÃO MUDAR SEM MOTIVO
+ * ========================================================================*/
+const long long controllerBTAdr[6] = {0x8c, 0xcd, 0xe8, 0x73, 0x72, 0x0e};
+const short controllerVID =  1406;
+const short controllerPID = 816;
+
+/*=========================================================================
  * CONFIGURAÇÕES DE CONTROLE
  *=========================================================================*/
 
@@ -40,5 +49,8 @@
 
 #define NORMALIZE_CONTROLLER_INPUT(input, lower, upper) (CLAMP(((input) - (lower)) / ((upper) - (lower)) * 2 - 1, -1.0, 1.0))
 
-#define ENABLE_DEBUG_PRINT !1
+#define ENABLE_DEBUG_PRINT 1
 #define ENABLE_COLORS_IN_PRINT 1
+
+#define ENABLE_CONNECTION_DEBUG_PRINT 1
+
