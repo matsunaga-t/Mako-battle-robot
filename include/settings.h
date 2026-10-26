@@ -10,7 +10,7 @@
 #define MOTOR_R2 19    // (int) pino das rodas direitas (para trás)
 #define MOTOR_L1 26    // (int) pino das rodas esquerdas (para frente)
 #define MOTOR_L2 25    // (int) pino das rodas esquerdas (para trás)
-#define FURADEIRA 23   // (int) pino da furadeira
+#define FURADEIRA 33   // (int) pino da furadeira
 #define SOLENOIDE 21   // (int) pino do solenoide (provavelmente não será usado)
 
 

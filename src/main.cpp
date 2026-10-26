@@ -153,7 +153,7 @@ void loop() {
     // Se o controle estiver conectado, lê os dados
     if (myController && myController->isConnected()) {
         // ativar a arma
-        digitalWrite(FURADEIRA, controlMode.settings.weapon = myController->l2());
+        digitalWrite(FURADEIRA, controlMode.settings.weapon = myController->l1() || myController->l2());
         
         #if ENABLE_ROBOT_STATE_DEBUG_PRINT
             #if ENABLE_COLORS_IN_PRINT
@@ -178,7 +178,7 @@ void loop() {
             changeModeDelay -= dt;
         
         // aciona o modo turbo
-        controlMode.settings.turbo = myController->r1();
+        controlMode.settings.turbo = myController->r1() || myController->r2();
         
         // atualiza os LEDs do controle
         myController->setPlayerLEDs(controlMode.led);
@@ -227,8 +227,8 @@ void loop() {
         // calcula a velocidade de cada roda
         // notando que a da roda esquerda é invertida
         // também é importante destacar que o modo corrigido atua aqui
-        RSpeed = CALCULATE_MOTOR_SPEED(linVel, angVel,   controlMode.settings.corrected && linVel < 0);
-        LSpeed = CALCULATE_MOTOR_SPEED(linVel, angVel, !(controlMode.settings.corrected && linVel < 0));
+        RSpeed = CALCULATE_MOTOR_SPEED(linVel, angVel, !(controlMode.settings.corrected && linVel < 0));
+        LSpeed = CALCULATE_MOTOR_SPEED(linVel, angVel,  (controlMode.settings.corrected && linVel < 0));
         
         // multiplicador para o modo turbo se as velocidades não forem nulas
         if (controlMode.settings.turbo && (linVel || angVel)){
